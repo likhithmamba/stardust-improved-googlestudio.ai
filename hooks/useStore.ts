@@ -18,6 +18,10 @@ interface AppState {
   edgePan: { x: number; y: number };
   focusModeTargetId: string | null; // Ultra Mode Focus
 
+  // Auto Map (Cosmic Graph View)
+  isAutoMapActive: boolean;
+  savedPositions: Record<string, { x: number; y: number }>;
+
   init: () => void;
   setCanvasState: (state: Partial<CanvasState>) => void;
   setSettings: (settings: Partial<Settings>) => void;
@@ -43,6 +47,7 @@ interface AppState {
   setNoteTheme: (id: string, theme: PlanetTheme) => void;
   setFocusModeTargetId: (id: string | null) => void;
   layoutSelectedNotes: (layout: LayoutType) => void;
+  toggleAutoMap: () => void;
 }
 
 const useStore = create<AppState>()(
@@ -56,7 +61,7 @@ const useStore = create<AppState>()(
         fontSize: 1,
         showConnections: true,
         showMinimap: true,
-        proMode: false,
+        proMode: true, // Enabled by default for template visibility
         ultraMode: false,
       },
       isLoaded: false,
@@ -68,6 +73,8 @@ const useStore = create<AppState>()(
       activeDropTargetId: null,
       edgePan: { x: 0, y: 0 },
       focusModeTargetId: null,
+      isAutoMapActive: false,
+      savedPositions: {},
       
       init: () => {
         set({
@@ -105,7 +112,7 @@ const useStore = create<AppState>()(
           tags: note.tags || [],
           linkedNoteIds: note.linkedNoteIds || [],
           groupId: null,
-          theme: 'default',
+          theme: note.theme || 'default',
         };
         // Initialize Nebula as its own group container
         if (newNote.type === NoteType.Nebula) {
@@ -228,6 +235,8 @@ const useStore = create<AppState>()(
           selectedNoteIds: [],
           searchBranchRootId: null,
           focusModeTargetId: null,
+          isAutoMapActive: false,
+          savedPositions: {},
         });
       },
 
@@ -344,6 +353,147 @@ const useStore = create<AppState>()(
       })),
       
       setFocusModeTargetId: (id) => set({ focusModeTargetId: id }),
+
+      toggleAutoMap: () => set((state) => {
+        if (state.isAutoMapActive) {
+          // Revert to original positions
+          const newNotes = { ...state.notes };
+          Object.keys(newNotes).forEach(id => {
+            if (state.savedPositions[id]) {
+              newNotes[id] = { ...newNotes[id], position: state.savedPositions[id] };
+            }
+          });
+          return { 
+            notes: newNotes, 
+            isAutoMapActive: false, 
+            savedPositions: {} 
+          };
+        } else {
+          // Calculate Force-Directed Graph Layout
+          const savedPositions: Record<string, { x: number; y: number }> = {};
+          const nodes = Object.values(state.notes);
+          if (nodes.length === 0) return { isAutoMapActive: true, savedPositions: {} };
+
+          // Save current positions
+          nodes.forEach(n => savedPositions[n.id] = { ...n.position });
+          
+          // Prepare simulation nodes
+          const simNodes = nodes.map(n => ({
+              id: n.id,
+              x: n.position.x,
+              y: n.position.y,
+              radius: NOTE_STYLES[n.type].size.diameter / 2,
+              vx: 0,
+              vy: 0
+          }));
+
+          const links: { source: string; target: string }[] = [];
+          nodes.forEach(n => {
+              if (n.parentId) links.push({ source: n.parentId, target: n.id });
+              n.linkedNoteIds.forEach(targetId => {
+                   if (n.id < targetId) links.push({ source: n.id, target: targetId });
+              });
+          });
+
+          // Simulation Parameters
+          const ITERATIONS = 120;
+          const REPULSION = 2000000; 
+          const K = 0.02; // Spring constant
+          const GRAVITY = 0.008; // Center gravity
+          const CENTER_X = state.canvasState.pan.x; // Use visual center roughly, but we correct later
+          const CENTER_Y = state.canvasState.pan.y;
+
+          for (let i = 0; i < ITERATIONS; i++) {
+              // 1. Repulsion
+              for (let a = 0; a < simNodes.length; a++) {
+                  for (let b = a + 1; b < simNodes.length; b++) {
+                      const na = simNodes[a];
+                      const nb = simNodes[b];
+                      const dx = na.x - nb.x;
+                      const dy = na.y - nb.y;
+                      let distSq = dx * dx + dy * dy;
+                      if (distSq === 0) { distSq = 1; }
+                      const dist = Math.sqrt(distSq);
+                      
+                      const combinedRadius = na.radius + nb.radius;
+                      const minDist = combinedRadius + 150; // Buffer
+
+                      let force = 0;
+                      // Stronger repulsion if overlapping
+                      if (dist < minDist) {
+                          force = (REPULSION * 5) / distSq; 
+                      } else {
+                          force = REPULSION / distSq;
+                      }
+
+                      const fx = (dx / dist) * force;
+                      const fy = (dy / dist) * force;
+                      
+                      na.vx += fx; na.vy += fy;
+                      nb.vx -= fx; nb.vy -= fy;
+                  }
+              }
+              
+              // 2. Springs (Links)
+              links.forEach(link => {
+                  const na = simNodes.find(n => n.id === link.source);
+                  const nb = simNodes.find(n => n.id === link.target);
+                  if (na && nb) {
+                      const dx = nb.x - na.x;
+                      const dy = nb.y - na.y;
+                      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                      const targetDist = (na.radius + nb.radius) + 300; // Desired link length
+                      const force = (dist - targetDist) * K;
+                      const fx = (dx / dist) * force;
+                      const fy = (dy / dist) * force;
+                      na.vx += fx; na.vy += fy;
+                      nb.vx -= fx; nb.vy -= fy;
+                  }
+              });
+
+              // 3. Gravity towards center (0,0) to keep graph connected and centered
+              simNodes.forEach(n => {
+                  n.vx -= n.x * GRAVITY;
+                  n.vy -= n.y * GRAVITY;
+                  
+                  // Damping
+                  n.vx *= 0.85;
+                  n.vy *= 0.85;
+                  n.x += n.vx;
+                  n.y += n.vy;
+              });
+          }
+          
+          // Re-center logic: find bounding box of simulation and center it at (0,0) or current view?
+          // Let's center at (0,0) so the graph is predictable
+          const minX = Math.min(...simNodes.map(n => n.x));
+          const maxX = Math.max(...simNodes.map(n => n.x));
+          const minY = Math.min(...simNodes.map(n => n.y));
+          const maxY = Math.max(...simNodes.map(n => n.y));
+          const graphCenterX = (minX + maxX) / 2;
+          const graphCenterY = (minY + maxY) / 2;
+          
+          const newNotes = { ...state.notes };
+          simNodes.forEach(n => {
+             if (newNotes[n.id]) {
+                 // Offset by graph center so the whole cluster is at 0,0
+                 newNotes[n.id] = { 
+                     ...newNotes[n.id], 
+                     position: { x: n.x - graphCenterX, y: n.y - graphCenterY } 
+                 };
+             }
+          });
+          
+          // Optionally reset pan/zoom to see the whole graph? 
+          // Let's keep canvas state as is to be less intrusive, user can pan to 0,0.
+          
+          return {
+              notes: newNotes,
+              isAutoMapActive: true,
+              savedPositions
+          };
+        }
+      }),
 
       layoutSelectedNotes: (layout) => {
         set((prev) => {

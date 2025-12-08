@@ -5,7 +5,7 @@ import useStore from '../hooks/useStore';
 import { Note, NoteType, Settings, LayoutType } from '../types';
 import { NOTE_STYLES } from '../constants';
 import Fuse from 'fuse.js';
-import { Map, Frame, HelpCircle, Sun, Moon, Sparkles, Search as SearchIcon, X, Link as LinkIcon, GitBranch, Brush, Plus, Download, Upload, Zap, Type, Crown, Crosshair, LayoutGrid, Circle, Wind, GitMerge } from 'lucide-react';
+import { Map, Frame, HelpCircle, Sun, Moon, Sparkles, Search as SearchIcon, X, Link as LinkIcon, GitBranch, Brush, Plus, Download, Upload, Zap, Type, Crown, Crosshair, LayoutGrid, Circle, Wind, GitMerge, Network } from 'lucide-react';
 
 // About Modal Component
 const AboutModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
@@ -38,7 +38,9 @@ const AboutModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen
                                 </div>
                             </div>
                             <p className="mt-4 text-base text-gray-700 dark:text-gray-300">
-                                An infinite canvas note-taking application powered by React and TypeScript. Now featuring Pro and Ultra productivity modes.
+                                An infinite canvas note-taking application powered by React and TypeScript. 
+                                <br/><br/>
+                                <strong>Pro Tip:</strong> Double-click anywhere to open the creation menu. Enable <strong>Pro Mode</strong> to access Quick Planet Templates.
                             </p>
                             <div className="mt-6">
                                 <h3 className="font-semibold text-lg mb-3">Core Technologies</h3>
@@ -232,6 +234,8 @@ export const Toolbar: React.FC = () => {
   const resetCanvas = useStore(state => state.resetCanvas);
   const selectedNoteIds = useStore(state => state.selectedNoteIds);
   const layoutSelectedNotes = useStore(state => state.layoutSelectedNotes);
+  const toggleAutoMap = useStore(state => state.toggleAutoMap);
+  const isAutoMapActive = useStore(state => state.isAutoMapActive);
 
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -353,6 +357,9 @@ export const Toolbar: React.FC = () => {
             {settings.ultraMode && (
                 <div className="flex items-center">
                     <div className="w-px h-6 bg-white/30 mx-2"></div>
+                    <IconButton onClick={toggleAutoMap} title="Auto Map View (Cosmic Graph)" active={isAutoMapActive}>
+                        <Network size={20} className={isAutoMapActive ? 'text-green-400 animate-pulse' : ''} />
+                    </IconButton>
                     <div className="px-2 text-xs font-bold text-purple-400 uppercase tracking-widest flex items-center"><Crown size={12} className="mr-1" /> Ultra</div>
                 </div>
             )}

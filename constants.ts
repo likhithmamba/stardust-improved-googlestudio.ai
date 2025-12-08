@@ -97,6 +97,59 @@ export const CELESTIAL_DESCRIPTIONS: Record<NoteType, string> = {
   [NoteType.Comet]: "A cosmic snowball of frozen gases, rock, and dust that orbits the Sun, often leaving a trail of debris.",
 };
 
+export interface TemplateConfig {
+    name: string;
+    type: NoteType;
+    theme: PlanetTheme;
+    content: string;
+    tags: string[];
+}
+
+export const QUICK_TEMPLATES: TemplateConfig[] = [
+    {
+        name: 'Task Planet',
+        type: NoteType.Mars,
+        theme: 'energetic',
+        content: '<h3>Mission Objectives</h3><ul style="list-style-type: none; padding: 0;"><li>☐ Initialize Thrusters</li><li>☐ Check O2 Levels</li><li>☐ Plot Trajectory</li></ul>',
+        tags: ['task', 'todo']
+    },
+    {
+        name: 'Study Planet',
+        type: NoteType.Jupiter,
+        theme: 'calm',
+        content: '<h3>Research Log</h3><p><strong>Subject:</strong> Quantum Entanglement</p><hr style="border-color: rgba(255,255,255,0.2)"/><p>Key Concepts:</p><ul><li>Superposition</li><li>Non-locality</li></ul>',
+        tags: ['study', 'research']
+    },
+    {
+        name: 'Brainstorm Planet',
+        type: NoteType.Nebula,
+        theme: 'default',
+        content: '<h1>Core Concept</h1><p>Radiating ideas...</p>',
+        tags: ['brainstorm', 'ideas']
+    },
+    {
+        name: 'Quote Comet',
+        type: NoteType.Comet,
+        theme: 'pastel',
+        content: '<blockquote style="border-left: 2px solid white; padding-left: 10px; font-style: italic;">"The universe is under no obligation to make sense to you."</blockquote><p>- Neil deGrasse Tyson</p>',
+        tags: ['quote', 'inspiration']
+    },
+    {
+        name: 'Timeline Belt',
+        type: NoteType.Saturn,
+        theme: 'noir',
+        content: '<h3>Chronology</h3><div style="display:flex; justify-content:space-between; border-top: 1px solid white; padding-top:5px; margin-top:10px;"><span>Start</span><span>&rarr;</span><span>End</span></div><p>Event 1: Big Bang</p>',
+        tags: ['timeline', 'history']
+    },
+    {
+        name: 'Habit Moon',
+        type: NoteType.Moon,
+        theme: 'noir',
+        content: '<h3>Orbit Tracker</h3><div style="display:grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align:center; font-size: 0.8em; margin-top:10px;"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div style="display:grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align:center; margin-top:5px;"><input type="checkbox"/><input type="checkbox"/><input type="checkbox"/><input type="checkbox"/><input type="checkbox"/><input type="checkbox"/><input type="checkbox"/></div>',
+        tags: ['habit', 'tracker']
+    }
+];
+
 export const BLACK_HOLE_PROPERTIES = {
     SIZE: 200, // Increased size for a more balanced UI
     PULL_DISTANCE: 320, // Proportional increase

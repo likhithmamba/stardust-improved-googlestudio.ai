@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import useStore from './hooks/useStore';
 import { Note, NoteType } from './types';
@@ -48,60 +49,81 @@ const calculateEdgePoints = (noteA: Note, noteB: Note) => {
 // Memoized to prevent re-rendering if props are identical
 const ConnectionLayer = React.memo(({ notes, visibleNoteIds, hoveredConnectionId, setHoveredConnectionId, removeParentLink, removeLink }: any) => {
     const hierarchicalConnections = useMemo(() => {
-        return (Object.values(notes) as Note[])
-          .filter(note => note.parentId && notes[note.parentId] && (visibleNoteIds.has(note.id) || visibleNoteIds.has(note.parentId)))
-          .map(note => {
-            const parent = notes[note.parentId!];
-            const { p1, p2 } = calculateEdgePoints(parent, note);
-            const connId = `h-conn-${parent.id}-${note.id}`;
-            const isHovered = hoveredConnectionId === connId;
-            const midX = (p1.x + p2.x) / 2;
-            const midY = (p1.y + p2.y) / 2;
-            
-            return (
-              <g key={connId} onMouseEnter={() => setHoveredConnectionId(connId)} onMouseLeave={() => setHoveredConnectionId(null)} className="cursor-pointer">
-                <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(192, 132, 252, 0.5)"} strokeWidth={isHovered ? "4" : "2"} strokeDasharray="5,5" className="transition-all duration-200" />
-                <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="transparent" strokeWidth="20" />
-                 {isHovered && (
-                   <foreignObject x={midX - 12} y={midY - 12} width="24" height="24">
-                      <button onClick={() => removeParentLink(note.id)} className="w-6 h-6 rounded-full bg-red-500/80 text-white border border-white/50 flex items-center justify-center leading-none hover:bg-red-500 transition-colors">&times;</button>
-                  </foreignObject>
-                 )}
-              </g>
-            );
-          });
+        const rendered = [];
+        // Iterate visible notes to find parents/children
+        for (const noteId of visibleNoteIds) {
+             const note = notes[noteId];
+             if (!note || !note.parentId) continue;
+             
+             // Check if parent is also visible (optional optimization: render even if parent offscreen? 
+             // Stardust philosophy: render if relevant. If parent is far offscreen, line might be huge. 
+             // Let's render if either is visible to ensure continuity at edges.)
+             const parent = notes[note.parentId];
+             if (!parent) continue;
+
+             const { p1, p2 } = calculateEdgePoints(parent, note);
+             const connId = `h-conn-${parent.id}-${note.id}`;
+             const isHovered = hoveredConnectionId === connId;
+             const midX = (p1.x + p2.x) / 2;
+             const midY = (p1.y + p2.y) / 2;
+             
+             rendered.push(
+               <g key={connId} onMouseEnter={() => setHoveredConnectionId(connId)} onMouseLeave={() => setHoveredConnectionId(null)} className="cursor-pointer">
+                 <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(192, 132, 252, 0.5)"} strokeWidth={isHovered ? "4" : "2"} strokeDasharray="5,5" className="transition-all duration-200" />
+                 <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="transparent" strokeWidth="20" />
+                  {isHovered && (
+                    <foreignObject x={midX - 12} y={midY - 12} width="24" height="24">
+                       <button onClick={() => removeParentLink(note.id)} className="w-6 h-6 rounded-full bg-red-500/80 text-white border border-white/50 flex items-center justify-center leading-none hover:bg-red-500 transition-colors">&times;</button>
+                   </foreignObject>
+                  )}
+               </g>
+             );
+        }
+        return rendered;
     }, [notes, visibleNoteIds, hoveredConnectionId, removeParentLink]);
     
     const arbitraryLinks = useMemo(() => {
-        return (Object.values(notes) as Note[]).flatMap(note => {
-            if (!note.linkedNoteIds) return [];
-            return note.linkedNoteIds.map(linkedId => {
-                const targetNote = notes[linkedId];
-                if (!targetNote || note.id > linkedId) return null;
-                if (!visibleNoteIds.has(note.id) && !visibleNoteIds.has(linkedId)) return null;
+        const rendered: React.ReactNode[] = [];
+        const processedPairs = new Set<string>();
 
-                const { p1, p2 } = calculateEdgePoints(note, targetNote);
-                const path = getCurvePath(p1, p2);
-                const connId = `a-conn-${note.id}-${linkedId}`;
-                const isHovered = hoveredConnectionId === connId;
-                const controlX = ((p1.x + p2.x) / 2) - (p2.y - p1.y) * 0.2;
-                const controlY = ((p1.y + p2.y) / 2) + (p2.x - p1.x) * 0.2;
-                const midCurveX = 0.25 * p1.x + 0.5 * controlX + 0.25 * p2.x;
-                const midCurveY = 0.25 * p1.y + 0.5 * controlY + 0.25 * p2.y;
-                
-                return (
-                  <g key={connId} onMouseEnter={() => setHoveredConnectionId(connId)} onMouseLeave={() => setHoveredConnectionId(null)} className="cursor-pointer">
-                    <path d={path} fill="none" stroke={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(59, 130, 246, 0.7)"} strokeWidth={isHovered ? "4" : "2"} className="transition-all duration-200" />
-                    <path d={path} fill="none" stroke="transparent" strokeWidth="20" />
-                    {isHovered && (
-                        <foreignObject x={midCurveX - 12} y={midCurveY - 12} width="24" height="24">
-                            <button onClick={() => removeLink(note.id, linkedId)} className="w-6 h-6 rounded-full bg-red-500/80 text-white border border-white/50 flex items-center justify-center leading-none hover:bg-red-500 transition-colors">&times;</button>
-                        </foreignObject>
-                    )}
-                  </g>
-                );
-            });
-        });
+        for (const noteId of visibleNoteIds) {
+            const note = notes[noteId];
+            if (!note || !note.linkedNoteIds) continue;
+            
+            for (const linkedId of note.linkedNoteIds) {
+                 const targetNote = notes[linkedId];
+                 if (!targetNote) continue;
+
+                 // Unique key for the pair to avoid double rendering if both are visible
+                 const pairKey = note.id < linkedId ? `${note.id}-${linkedId}` : `${linkedId}-${note.id}`;
+                 if (processedPairs.has(pairKey)) continue;
+                 processedPairs.add(pairKey);
+
+                 const { p1, p2 } = calculateEdgePoints(note, targetNote);
+                 const path = getCurvePath(p1, p2);
+                 const connId = `a-conn-${pairKey}`;
+                 const isHovered = hoveredConnectionId === connId;
+                 
+                 // Approximate control points for button placement
+                 const controlX = ((p1.x + p2.x) / 2) - (p2.y - p1.y) * 0.2;
+                 const controlY = ((p1.y + p2.y) / 2) + (p2.x - p1.x) * 0.2;
+                 const midCurveX = 0.25 * p1.x + 0.5 * controlX + 0.25 * p2.x;
+                 const midCurveY = 0.25 * p1.y + 0.5 * controlY + 0.25 * p2.y;
+
+                 rendered.push(
+                   <g key={connId} onMouseEnter={() => setHoveredConnectionId(connId)} onMouseLeave={() => setHoveredConnectionId(null)} className="cursor-pointer">
+                     <path d={path} fill="none" stroke={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(59, 130, 246, 0.7)"} strokeWidth={isHovered ? "4" : "2"} className="transition-all duration-200" />
+                     <path d={path} fill="none" stroke="transparent" strokeWidth="20" />
+                     {isHovered && (
+                         <foreignObject x={midCurveX - 12} y={midCurveY - 12} width="24" height="24">
+                             <button onClick={() => removeLink(note.id, linkedId)} className="w-6 h-6 rounded-full bg-red-500/80 text-white border border-white/50 flex items-center justify-center leading-none hover:bg-red-500 transition-colors">&times;</button>
+                         </foreignObject>
+                     )}
+                   </g>
+                 );
+            }
+        }
+        return rendered;
     }, [notes, visibleNoteIds, hoveredConnectionId, removeLink]);
 
     return <g>{hierarchicalConnections}{arbitraryLinks}</g>;
@@ -136,6 +158,7 @@ const App: React.FC = () => {
   const setSelectedNoteIds = useStore(state => state.setSelectedNoteIds);
   const removeLink = useStore(state => state.removeLink);
   const removeParentLink = useStore(state => state.removeParentLink);
+  const isAutoMapActive = useStore(state => state.isAutoMapActive);
 
   const [creationMenu, setCreationMenu] = useState<CreationMenuState>({ visible: false, x: 0, y: 0 });
   const appRef = useRef<HTMLDivElement>(null);
@@ -224,6 +247,8 @@ const App: React.FC = () => {
     const viewRight = (-pan.x + width) / zoom + padding;
     const viewBottom = (-pan.y + height) / zoom + padding;
     const visibleIds = new Set<string>();
+    
+    // Using Object.values is O(N). For < 1000 notes, this is acceptable (sub-1ms).
     for (const note of Object.values(notes) as Note[]) {
         const style = NOTE_STYLES[note.type];
         const noteRight = note.position.x + style.size.diameter;
@@ -277,6 +302,7 @@ const App: React.FC = () => {
       let targetCenter = { x: rawMouseX, y: rawMouseY };
 
       // Optimized Snap-to-Target Detection
+      // Iterate only visible notes for snapping
       for (const id of visibleNoteIds) {
           if (id === linkDragState.fromId) continue;
           const note = notes[id];
@@ -400,8 +426,7 @@ const App: React.FC = () => {
   if (!isLoaded) return <div className="w-screen h-screen flex items-center justify-center bg-cosmic-bg-dark text-white">Loading Stardust Canvas...</div>;
   const focusedNote = focusedNoteId ? notes[focusedNoteId] : null;
   const selectedGroupIds = new Set(selectedNoteIds.map(id => notes[id]?.groupId).filter(Boolean));
-  // Removed showConnectionTargets calculation to avoid mass re-renders
-
+  
   return (
     <div className="w-screen h-screen overflow-hidden relative">
       {settings.theme === 'cosmic' && <Starfield />}
@@ -427,7 +452,7 @@ const App: React.FC = () => {
           }}
         >
           <svg className="absolute top-0 left-0 w-px h-px overflow-visible pointer-events-none">
-              {settings.showConnections && (
+              {(settings.showConnections || isAutoMapActive) && (
                   <ConnectionLayer 
                     notes={notes} 
                     visibleNoteIds={visibleNoteIds}

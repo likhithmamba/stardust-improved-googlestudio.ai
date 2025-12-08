@@ -164,8 +164,10 @@ const NoteComponent: React.FC<NoteProps> = ({ note, isSelected, isPartofSelected
   const isBlackHole = note.type === NoteTypeEnum.BlackHole;
   const [isExitingToBlackHole, setIsExitingToBlackHole] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const isDragUpdateScheduled = useRef(false);
   const blackHoleRect = useRef<DOMRect | null>(null);
+  
+  // Cache targets for collision detection to avoid O(N) loop every frame
+  const collisionTargets = useRef<NoteType[]>([]);
 
   const style = NOTE_STYLES[note.type];
   
@@ -201,123 +203,158 @@ const NoteComponent: React.FC<NoteProps> = ({ note, isSelected, isPartofSelected
   const handleDragStart = () => {
     const el = document.getElementById('black-hole');
     blackHoleRect.current = el ? el.getBoundingClientRect() : null;
+    
+    // Cache interactive nodes (BlackHoles and Nebulas) for faster collision detection
+    const allNotes = useStore.getState().notes;
+    collisionTargets.current = Object.values(allNotes).filter(n => 
+        (n.type === NoteTypeEnum.Nebula || n.type === NoteTypeEnum.BlackHole) && n.id !== note.id
+    );
   };
 
   const handleDrag = (_: any, info: any) => {
-    if (isDragUpdateScheduled.current) return;
-    isDragUpdateScheduled.current = true;
-
-    requestAnimationFrame(() => {
-        const state = useStore.getState();
-        const { isAbsorbingNoteId, notes, canvasState, activeDropTargetId, edgePan } = state;
-        
-        // 1. Black Hole Pull Logic
-        let isPulling = false;
-        if (blackHoleRect.current) {
-            const holeCenter = { x: blackHoleRect.current.left + blackHoleRect.current.width / 2, y: blackHoleRect.current.top + blackHoleRect.current.height / 2 };
-            const distance = Math.hypot(info.point.x - holeCenter.x, info.point.y - holeCenter.y);
-            if (distance < BLACK_HOLE_PROPERTIES.PULL_DISTANCE) {
-                isPulling = true;
-            }
+    const state = useStore.getState();
+    const { isAbsorbingNoteId, canvasState, activeDropTargetId, edgePan } = state;
+    
+    // 1. Black Hole Pull Logic
+    let isPulling = false;
+    if (blackHoleRect.current) {
+        const holeCenter = { x: blackHoleRect.current.left + blackHoleRect.current.width / 2, y: blackHoleRect.current.top + blackHoleRect.current.height / 2 };
+        const distance = Math.hypot(info.point.x - holeCenter.x, info.point.y - holeCenter.y);
+        if (distance < BLACK_HOLE_PROPERTIES.PULL_DISTANCE) {
+            isPulling = true;
         }
+    }
 
-        if (!isPulling && !isBlackHole) {
-             const noteCenter = {
-                x: note.position.x + info.offset.x / canvasState.zoom + style.size.diameter / 2,
-                y: note.position.y + info.offset.y / canvasState.zoom + style.size.diameter / 2,
-            };
-            
-            for (const otherNote of Object.values(notes) as NoteType[]) {
-                if (otherNote.type === NoteTypeEnum.BlackHole && otherNote.id !== note.id) {
-                    const bhStyle = NOTE_STYLES[NoteTypeEnum.BlackHole];
-                    const bhCenter = {
-                        x: otherNote.position.x + bhStyle.size.diameter / 2,
-                        y: otherNote.position.y + bhStyle.size.diameter / 2,
-                    };
-                    const dx = noteCenter.x - bhCenter.x;
-                    const dy = noteCenter.y - bhCenter.y;
-                    if (Math.abs(dx) < bhStyle.size.diameter && Math.abs(dy) < bhStyle.size.diameter) {
-                         const dist = Math.hypot(dx, dy);
-                         if (dist < bhStyle.size.diameter) {
-                             isPulling = true;
-                             break;
-                         }
-                    }
+    // Optimization: Calculate note center once
+    const noteCenter = {
+        x: note.position.x + info.offset.x / canvasState.zoom + style.size.diameter / 2,
+        y: note.position.y + info.offset.y / canvasState.zoom + style.size.diameter / 2,
+    };
+
+    if (!isPulling && !isBlackHole) {
+        // Iterate only cached targets (O(K) instead of O(N))
+        for (const otherNote of collisionTargets.current) {
+            if (otherNote.type === NoteTypeEnum.BlackHole) {
+                const bhStyle = NOTE_STYLES[NoteTypeEnum.BlackHole];
+                const bhCenter = {
+                    x: otherNote.position.x + bhStyle.size.diameter / 2,
+                    y: otherNote.position.y + bhStyle.size.diameter / 2,
+                };
+                const dx = noteCenter.x - bhCenter.x;
+                const dy = noteCenter.y - bhCenter.y;
+                if (Math.abs(dx) < bhStyle.size.diameter && Math.abs(dy) < bhStyle.size.diameter) {
+                        const dist = Math.hypot(dx, dy);
+                        if (dist < bhStyle.size.diameter) {
+                            isPulling = true;
+                            break;
+                        }
                 }
             }
         }
+    }
 
-        if (isPulling && isAbsorbingNoteId !== note.id) {
-            setIsAbsorbingNoteId(note.id);
-        } else if (!isPulling && isAbsorbingNoteId === note.id) {
-            setIsAbsorbingNoteId(null);
-        }
+    if (isPulling && isAbsorbingNoteId !== note.id) {
+        setIsAbsorbingNoteId(note.id);
+    } else if (!isPulling && isAbsorbingNoteId === note.id) {
+        setIsAbsorbingNoteId(null);
+    }
 
-        // 2. Nebula Grouping Target Logic
-        if (note.type !== NoteTypeEnum.Nebula) { // Nebulas cannot be dropped into other nebulas
-            const { diameter } = NOTE_STYLES[note.type].size;
-            const noteCenter = {
-                x: note.position.x + info.offset.x / canvasState.zoom + diameter / 2,
-                y: note.position.y + info.offset.y / canvasState.zoom + diameter / 2,
-            };
+    // 2. Nebula Grouping Target Logic
+    if (note.type !== NoteTypeEnum.Nebula) { 
+        let targetId: string | null = null;
+        for (const otherNote of collisionTargets.current) {
+            if (otherNote.type === NoteTypeEnum.Nebula) {
+                const nebulaStyle = NOTE_STYLES[NoteTypeEnum.Nebula];
+                // Simple AABB check
+                const left = otherNote.position.x;
+                const right = otherNote.position.x + nebulaStyle.size.diameter;
+                const top = otherNote.position.y;
+                const bottom = otherNote.position.y + nebulaStyle.size.diameter;
 
-            let targetId: string | null = null;
-            for (const otherNote of Object.values(notes) as NoteType[]) {
-                if (otherNote.type === NoteTypeEnum.Nebula && otherNote.id !== note.id) {
-                    const nebulaStyle = NOTE_STYLES[NoteTypeEnum.Nebula];
-                    const nebulaRect = {
-                        left: otherNote.position.x,
-                        top: otherNote.position.y,
-                        right: otherNote.position.x + nebulaStyle.size.diameter,
-                        bottom: otherNote.position.y + nebulaStyle.size.diameter,
-                    };
-                    if (noteCenter.x > nebulaRect.left && noteCenter.x < nebulaRect.right &&
-                        noteCenter.y > nebulaRect.top && noteCenter.y < nebulaRect.bottom) {
-                        targetId = otherNote.id;
-                        break;
-                    }
+                if (noteCenter.x > left && noteCenter.x < right &&
+                    noteCenter.y > top && noteCenter.y < bottom) {
+                    targetId = otherNote.id;
+                    break;
                 }
             }
-            if (targetId !== activeDropTargetId) {
-                setActiveDropTargetId(targetId);
-            }
         }
+        if (targetId !== activeDropTargetId) {
+            setActiveDropTargetId(targetId);
+        }
+    }
 
-        // 3. Edge Panning
-        const EDGE_MARGIN = 60;
-        const MAX_PAN_SPEED = 15;
-        const { clientX, clientY } = info.point;
-        const { innerWidth, innerHeight } = window;
-        let panX = 0;
-        let panY = 0;
+    // 3. Edge Panning
+    const EDGE_MARGIN = 60;
+    const MAX_PAN_SPEED = 15;
+    const { clientX, clientY } = info.point;
+    const { innerWidth, innerHeight } = window;
+    let panX = 0;
+    let panY = 0;
 
-        if (clientX < EDGE_MARGIN) {
-            panX = (EDGE_MARGIN - clientX) / EDGE_MARGIN * MAX_PAN_SPEED;
-        } else if (clientX > innerWidth - EDGE_MARGIN) {
-            panX = -(clientX - (innerWidth - EDGE_MARGIN)) / EDGE_MARGIN * MAX_PAN_SPEED;
-        }
+    if (clientX < EDGE_MARGIN) {
+        panX = (EDGE_MARGIN - clientX) / EDGE_MARGIN * MAX_PAN_SPEED;
+    } else if (clientX > innerWidth - EDGE_MARGIN) {
+        panX = -(clientX - (innerWidth - EDGE_MARGIN)) / EDGE_MARGIN * MAX_PAN_SPEED;
+    }
 
-        if (clientY < EDGE_MARGIN) {
-            panY = (EDGE_MARGIN - clientY) / EDGE_MARGIN * MAX_PAN_SPEED;
-        } else if (clientY > innerHeight - EDGE_MARGIN) {
-            panY = -(clientY - (innerHeight - EDGE_MARGIN)) / EDGE_MARGIN * MAX_PAN_SPEED;
-        }
-        
-        if (panX !== edgePan.x || panY !== edgePan.y) {
-            setEdgePan({ x: panX, y: panY });
-        }
-        
-        isDragUpdateScheduled.current = false;
-    });
+    if (clientY < EDGE_MARGIN) {
+        panY = (EDGE_MARGIN - clientY) / EDGE_MARGIN * MAX_PAN_SPEED;
+    } else if (clientY > innerHeight - EDGE_MARGIN) {
+        panY = -(clientY - (innerHeight - EDGE_MARGIN)) / EDGE_MARGIN * MAX_PAN_SPEED;
+    }
+    
+    if (panX !== edgePan.x || panY !== edgePan.y) {
+        setEdgePan({ x: panX, y: panY });
+    }
   };
   
   const handleDragEnd = (_: any, info: any) => {
     blackHoleRect.current = null;
     setEdgePan({ x: 0, y: 0 }); 
     
-    const { canvasState, notes } = useStore.getState();
+    const { canvasState, notes, settings } = useStore.getState();
 
-    // 1. Black Hole Deletion Check
+    // 1. Calculate Target Position (Raw)
+    let targetX = note.position.x + info.offset.x / canvasState.zoom;
+    let targetY = note.position.y + info.offset.y / canvasState.zoom;
+
+    // 2. Pro Mode: Magnetic Alignment & Grid Snap
+    if (settings.proMode) {
+        // Grid Snap (10px)
+        targetX = Math.round(targetX / 10) * 10;
+        targetY = Math.round(targetY / 10) * 10;
+
+        // Center Snap
+        const currentRadius = NOTE_STYLES[note.type].size.diameter / 2;
+        const centerX = targetX + currentRadius;
+        const centerY = targetY + currentRadius;
+        const SNAP_THRESHOLD = 20;
+
+        let bestDistX = SNAP_THRESHOLD;
+        let bestDistY = SNAP_THRESHOLD;
+
+        for (const otherId in notes) {
+            if (otherId === note.id) continue;
+            const otherNote = notes[otherId];
+            const otherRadius = NOTE_STYLES[otherNote.type].size.diameter / 2;
+            const otherCenterX = otherNote.position.x + otherRadius;
+            const otherCenterY = otherNote.position.y + otherRadius;
+
+            const distX = Math.abs(centerX - otherCenterX);
+            const distY = Math.abs(centerY - otherCenterY);
+
+            if (distX < bestDistX) {
+                targetX = otherCenterX - currentRadius;
+                bestDistX = distX;
+            }
+            if (distY < bestDistY) {
+                targetY = otherCenterY - currentRadius;
+                bestDistY = distY;
+            }
+        }
+    }
+
+    // 3. Black Hole Deletion Check
     const blackHoleEl = document.getElementById('black-hole');
     if (blackHoleEl) {
         const holeRect = blackHoleEl.getBoundingClientRect();
@@ -331,11 +368,7 @@ const NoteComponent: React.FC<NoteProps> = ({ note, isSelected, isPartofSelected
 
     if (!isBlackHole) {
         const { diameter } = NOTE_STYLES[note.type].size;
-        const finalPosition = { 
-            x: note.position.x + info.offset.x / canvasState.zoom,
-            y: note.position.y + info.offset.y / canvasState.zoom
-        };
-        const center = { x: finalPosition.x + diameter / 2, y: finalPosition.y + diameter / 2 };
+        const center = { x: targetX + diameter / 2, y: targetY + diameter / 2 };
 
         for (const otherNote of Object.values(notes) as NoteType[]) {
              if (otherNote.type === NoteTypeEnum.BlackHole && otherNote.id !== note.id) {
@@ -356,16 +389,12 @@ const NoteComponent: React.FC<NoteProps> = ({ note, isSelected, isPartofSelected
     setIsAbsorbingNoteId(null);
     setActiveDropTargetId(null);
 
-    // 2. Nebula Grouping Commit
+    // 4. Nebula Grouping Commit
     if (note.type !== NoteTypeEnum.Nebula) {
         const { diameter } = NOTE_STYLES[note.type].size;
-        const finalPosition = { 
-            x: note.position.x + info.offset.x / canvasState.zoom,
-            y: note.position.y + info.offset.y / canvasState.zoom
-        };
         const finalCenter = {
-            x: finalPosition.x + diameter / 2,
-            y: finalPosition.y + diameter / 2
+            x: targetX + diameter / 2,
+            y: targetY + diameter / 2
         };
         let newGroupId: string | null = null;
         for (const otherNote of Object.values(notes) as NoteType[]) {
@@ -389,10 +418,10 @@ const NoteComponent: React.FC<NoteProps> = ({ note, isSelected, isPartofSelected
         }
     }
 
-    // 3. Final Position Update
+    // 5. Final Position Update
     const delta = {
-        x: info.offset.x / canvasState.zoom,
-        y: info.offset.y / canvasState.zoom,
+        x: targetX - note.position.x,
+        y: targetY - note.position.y,
     };
     if (delta.x !== 0 || delta.y !== 0) {
         updateNotePosition(note.id, delta);
