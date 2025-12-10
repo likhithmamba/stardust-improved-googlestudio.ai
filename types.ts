@@ -57,10 +57,34 @@ export interface Settings {
     font: 'inter' | 'serif' | 'mono';
     fontColor: string;
     fontSize: number; // Font size scale factor (0.5 to 2.0)
-    showConnections: boolean;
+    
+    // Feature Toggles
     showMinimap: boolean;
     
-    // Mode Toggles
-    proMode: boolean;   // Enables Themes, Smart Search, Magnetic Align, Auto-Arrange
-    ultraMode: boolean; // Enables Focus Mode, Invoice Universe, Quest Mode
+    // Experience Modes
+    mode: 'core' | 'pro' | 'ultra';
+    
+    // Pro Features
+    pro: {
+        magneticAlignment: boolean;
+        smartZoom: boolean;
+        planetThemes: boolean;
+    };
+    
+    // Ultra Features
+    ultra: {
+        focusMode: boolean;
+        autoMapGraph: boolean;
+        hierarchyLines: boolean;
+        invoiceUniverse: boolean;
+    };
+}
+
+export interface TemplateConfig {
+    name: string;
+    type: NoteType;
+    theme: PlanetTheme;
+    content: string;
+    tags: string[];
+    icon: string; // Icon identifier
 }

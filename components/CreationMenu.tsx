@@ -4,7 +4,11 @@ import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { NoteType, Note, PlanetTheme } from '../types';
 import { NOTE_STYLES, QUICK_TEMPLATES } from '../constants';
 import useStore from '../hooks/useStore';
-import { LayoutTemplate, Globe, Lock } from 'lucide-react';
+import { 
+    LayoutTemplate, Globe, Lock, 
+    Kanban, Grid, AlertCircle, Target, Users, Code, Calendar, Quote,
+    Map, Layers, RefreshCw, UserCircle, Server, Activity
+} from 'lucide-react';
 
 interface CreationMenuProps {
     x: number;
@@ -37,12 +41,30 @@ const celestialBodies: NoteType[] = [
     NoteType.Comet,
 ];
 
+// Helper to map string icon names to Lucide components
+const IconMap: Record<string, React.ElementType> = {
+    kanban: Kanban,
+    grid: Grid,
+    'alert-circle': AlertCircle,
+    target: Target,
+    users: Users,
+    code: Code,
+    calendar: Calendar,
+    quote: Quote,
+    map: Map,
+    layers: Layers,
+    'refresh-cw': RefreshCw,
+    'user-circle': UserCircle,
+    server: Server,
+    activity: Activity,
+};
+
 const CreationMenu: React.FC<CreationMenuProps> = ({ x, y, onSelect, onClose }) => {
     const settings = useStore(state => state.settings);
     const addNote = useStore(state => state.addNote);
     const [view, setView] = useState<'elements' | 'templates'>('elements');
 
-    const radius = 380;
+    const radius = 420; // Increased radius for larger items
     const items = view === 'elements' ? celestialBodies : QUICK_TEMPLATES;
     const angleStep = (Math.PI * 2) / items.length;
 
@@ -64,28 +86,19 @@ const CreationMenu: React.FC<CreationMenuProps> = ({ x, y, onSelect, onClose }) 
             transition: { type: 'spring', stiffness: 300, damping: 15 },
         },
         hover: {
-            scale: 1.2,
+            scale: 1.15,
             zIndex: 10,
             transition: { type: 'spring', stiffness: 400, damping: 10 },
         }
     };
 
     const handleTemplateSelect = (template: typeof QUICK_TEMPLATES[0]) => {
-        // We bypass the parent onSelect for templates because they carry more data than just type
         const noteData: Partial<Note> = {
             type: template.type,
             content: template.content,
             tags: template.tags,
             theme: template.theme
         };
-        // We need to calculate position similar to how App.tsx does it, but addNote handles Orbital placement if not provided.
-        // To place it at mouse cursor, we need to pass the position.
-        // However, App.tsx's handleCreateNoteFromMenu logic handles the calculation based on menu position.
-        // We can re-use onSelect if we just wanted the type, but we want content.
-        
-        // Since the parent's onSelect only accepts type, we'll manually call addNote here
-        // We need to inverse the calculation done in App.tsx or just pass orbital=false
-        // For simplicity, we'll use the store directly and use the same calculation logic as App.tsx relative to the menu center.
         
         const rect = document.querySelector('#root')?.getBoundingClientRect();
         if(!rect) return;
@@ -103,30 +116,32 @@ const CreationMenu: React.FC<CreationMenuProps> = ({ x, y, onSelect, onClose }) 
         onClose();
     };
 
+    const isProOrUltra = settings.mode !== 'core';
+
     return (
         <div className="fixed inset-0 z-20" onClick={onClose}>
             {/* Mode Toggle - Always Visible now */}
             <motion.div 
                 className="fixed z-40 flex bg-black/60 backdrop-blur-md rounded-full p-1 border border-glass-edge"
-                style={{ left: x, top: y - 80, transform: 'translateX(-50%)' }}
+                style={{ left: x, top: y - 100, transform: 'translateX(-50%)' }}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 onClick={(e) => e.stopPropagation()}
             >
                 <button 
                     onClick={() => setView('elements')}
-                    className={`p-2 rounded-full transition-colors ${view === 'elements' ? 'bg-white/20 text-sky-400' : 'text-gray-400 hover:text-white'}`}
+                    className={`p-3 rounded-full transition-colors ${view === 'elements' ? 'bg-white/20 text-sky-400' : 'text-gray-400 hover:text-white'}`}
                     title="Celestial Elements"
                 >
-                    <Globe size={20} />
+                    <Globe size={24} />
                 </button>
                 <button 
-                    onClick={() => settings.proMode && setView('templates')}
-                    className={`p-2 rounded-full transition-colors ${view === 'templates' ? 'bg-white/20 text-purple-400' : settings.proMode ? 'text-gray-400 hover:text-white' : 'text-gray-600'}`}
-                    title={settings.proMode ? "Pro Templates" : "Enable Pro Mode in Settings"}
-                    style={{ cursor: settings.proMode ? 'pointer' : 'not-allowed' }}
+                    onClick={() => isProOrUltra && setView('templates')}
+                    className={`p-3 rounded-full transition-colors ${view === 'templates' ? 'bg-white/20 text-purple-400' : isProOrUltra ? 'text-gray-400 hover:text-white' : 'text-gray-600'}`}
+                    title={isProOrUltra ? "Pro Templates" : "Enable Pro Mode in Settings"}
+                    style={{ cursor: isProOrUltra ? 'pointer' : 'not-allowed' }}
                 >
-                    {settings.proMode ? <LayoutTemplate size={20} /> : <Lock size={16} />}
+                    {isProOrUltra ? <LayoutTemplate size={24} /> : <Lock size={20} />}
                 </button>
             </motion.div>
 
@@ -194,7 +209,10 @@ const CreationMenu: React.FC<CreationMenuProps> = ({ x, y, onSelect, onClose }) 
                             const itemX = radius * Math.cos(angle);
                             const itemY = radius * Math.sin(angle);
                             const style = NOTE_STYLES[template.type];
-                            const previewDiameter = Math.max(30, style.size.diameter / 12);
+                            
+                            // Fixed, larger size for templates to accommodate text
+                            const previewDiameter = 90;
+                            const IconComponent = IconMap[template.icon] || LayoutTemplate;
 
                             return (
                                 <motion.div
@@ -212,23 +230,30 @@ const CreationMenu: React.FC<CreationMenuProps> = ({ x, y, onSelect, onClose }) 
                                             e.stopPropagation();
                                             handleTemplateSelect(template);
                                         }}
-                                        className={`transition-all duration-200 flex items-center justify-center relative group ${style.colors} ${style.glow}`}
+                                        className={`transition-all duration-200 flex flex-col items-center justify-center relative group ${style.colors} ${style.glow}`}
                                         style={{
                                             width: previewDiameter,
                                             height: previewDiameter,
-                                            borderRadius: '9999px',
+                                            borderRadius: '50%',
+                                            borderWidth: '2px',
                                         }}
                                         title={template.name}
                                     >
-                                        <div className="absolute inset-0 flex items-center justify-center font-bold text-[10px] text-white/90 drop-shadow-md text-center px-1">
-                                            {template.name.split(' ')[0]}
+                                        <div className="flex flex-col items-center justify-center text-white/90 drop-shadow-md z-10 px-1">
+                                            <IconComponent size={24} className="mb-1" />
+                                            <span className="text-[10px] font-bold uppercase tracking-wider leading-tight text-center w-full break-words">
+                                                {template.name}
+                                            </span>
                                         </div>
+                                        
+                                        {/* Background effect for text readability */}
+                                        <div className="absolute inset-0 bg-black/20 rounded-full z-0"></div>
+
                                         {style.hasRings && (
                                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                <div className="w-[180%] h-[180%] border-[2px] border-amber-200/70 rounded-full" style={{ transform: 'rotateX(70deg)' }} />
+                                                <div className="w-[160%] h-[160%] border-[2px] border-amber-200/50 rounded-full" style={{ transform: 'rotateX(70deg)' }} />
                                             </div>
                                         )}
-                                        <span className="absolute -bottom-6 text-xs text-purple-300 bg-black/60 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-purple-500/30">{template.name}</span>
                                     </button>
                                 </motion.div>
                             );

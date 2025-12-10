@@ -11,6 +11,7 @@ import CreationMenu from './components/CreationMenu';
 import { Toolbar, Minimap, Search } from './components/UI';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { telemetry } from './services/telemetry';
 
 interface CreationMenuState {
   visible: boolean;
@@ -24,11 +25,10 @@ interface LinkDragState {
     toMousePos: { x: number; y: number };
 }
 
-// ---------------- Helper Functions for Connections ----------------
+// ---------------- Helper Functions ----------------
 const getCurvePath = (p1: {x:number, y:number}, p2: {x:number, y:number}) => {
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
-    // Simple midpoint curve logic is faster than complex bezier if called frequently
     const midX = (p1.x + p2.x) / 2 - dy * 0.2;
     const midY = (p1.y + p2.y) / 2 + dx * 0.2;
     return `M ${p1.x} ${p1.y} Q ${midX} ${midY} ${p2.x} ${p2.y}`;
@@ -45,78 +45,59 @@ const calculateEdgePoints = (noteA: Note, noteB: Note) => {
     return { p1, p2 };
 };
 
-// ---------------- Isolated Connection Layer Component ----------------
-// Memoized to prevent re-rendering if props are identical
-const ConnectionLayer = React.memo(({ notes, visibleNoteIds, hoveredConnectionId, setHoveredConnectionId, removeParentLink, removeLink }: any) => {
+// ---------------- Connection Layer ----------------
+const ConnectionLayer = React.memo(({ notes, visibleNoteIds, hoveredConnectionId, setHoveredConnectionId, removeParentLink, removeLink, settings }: any) => {
+    if (!notes) return null;
+
     const hierarchicalConnections = useMemo(() => {
+        if (settings.mode !== 'ultra' && !settings.ultra?.hierarchyLines) return [];
         const rendered = [];
-        // Iterate visible notes to find parents/children
         for (const noteId of visibleNoteIds) {
              const note = notes[noteId];
              if (!note || !note.parentId) continue;
-             
-             // Check if parent is also visible (optional optimization: render even if parent offscreen? 
-             // Stardust philosophy: render if relevant. If parent is far offscreen, line might be huge. 
-             // Let's render if either is visible to ensure continuity at edges.)
              const parent = notes[note.parentId];
              if (!parent) continue;
-
              const { p1, p2 } = calculateEdgePoints(parent, note);
              const connId = `h-conn-${parent.id}-${note.id}`;
              const isHovered = hoveredConnectionId === connId;
              const midX = (p1.x + p2.x) / 2;
              const midY = (p1.y + p2.y) / 2;
-             
              rendered.push(
                <g key={connId} onMouseEnter={() => setHoveredConnectionId(connId)} onMouseLeave={() => setHoveredConnectionId(null)} className="cursor-pointer">
-                 <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(192, 132, 252, 0.5)"} strokeWidth={isHovered ? "4" : "2"} strokeDasharray="5,5" className="transition-all duration-200" />
-                 <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke="transparent" strokeWidth="20" />
-                  {isHovered && (
+                 <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(192, 132, 252, 0.4)"} strokeWidth={isHovered ? "4" : "2"} strokeDasharray="8,4" className="transition-all duration-200" />
+                 {isHovered && (
                     <foreignObject x={midX - 12} y={midY - 12} width="24" height="24">
-                       <button onClick={() => removeParentLink(note.id)} className="w-6 h-6 rounded-full bg-red-500/80 text-white border border-white/50 flex items-center justify-center leading-none hover:bg-red-500 transition-colors">&times;</button>
+                       <button onClick={() => removeParentLink(note.id)} className="w-6 h-6 rounded-full bg-red-500/80 text-white border border-white/50 flex items-center justify-center hover:bg-red-500 transition-colors">&times;</button>
                    </foreignObject>
                   )}
                </g>
              );
         }
         return rendered;
-    }, [notes, visibleNoteIds, hoveredConnectionId, removeParentLink]);
+    }, [notes, visibleNoteIds, hoveredConnectionId, removeParentLink, settings]);
     
     const arbitraryLinks = useMemo(() => {
         const rendered: React.ReactNode[] = [];
         const processedPairs = new Set<string>();
-
         for (const noteId of visibleNoteIds) {
             const note = notes[noteId];
             if (!note || !note.linkedNoteIds) continue;
-            
             for (const linkedId of note.linkedNoteIds) {
                  const targetNote = notes[linkedId];
                  if (!targetNote) continue;
-
-                 // Unique key for the pair to avoid double rendering if both are visible
                  const pairKey = note.id < linkedId ? `${note.id}-${linkedId}` : `${linkedId}-${note.id}`;
                  if (processedPairs.has(pairKey)) continue;
                  processedPairs.add(pairKey);
-
                  const { p1, p2 } = calculateEdgePoints(note, targetNote);
                  const path = getCurvePath(p1, p2);
                  const connId = `a-conn-${pairKey}`;
                  const isHovered = hoveredConnectionId === connId;
-                 
-                 // Approximate control points for button placement
-                 const controlX = ((p1.x + p2.x) / 2) - (p2.y - p1.y) * 0.2;
-                 const controlY = ((p1.y + p2.y) / 2) + (p2.x - p1.x) * 0.2;
-                 const midCurveX = 0.25 * p1.x + 0.5 * controlX + 0.25 * p2.x;
-                 const midCurveY = 0.25 * p1.y + 0.5 * controlY + 0.25 * p2.y;
-
                  rendered.push(
                    <g key={connId} onMouseEnter={() => setHoveredConnectionId(connId)} onMouseLeave={() => setHoveredConnectionId(null)} className="cursor-pointer">
                      <path d={path} fill="none" stroke={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(59, 130, 246, 0.7)"} strokeWidth={isHovered ? "4" : "2"} className="transition-all duration-200" />
-                     <path d={path} fill="none" stroke="transparent" strokeWidth="20" />
                      {isHovered && (
-                         <foreignObject x={midCurveX - 12} y={midCurveY - 12} width="24" height="24">
-                             <button onClick={() => removeLink(note.id, linkedId)} className="w-6 h-6 rounded-full bg-red-500/80 text-white border border-white/50 flex items-center justify-center leading-none hover:bg-red-500 transition-colors">&times;</button>
+                         <foreignObject x={(p1.x+p2.x)/2 - 12} y={(p1.y+p2.y)/2 - 12} width="24" height="24">
+                             <button onClick={() => removeLink(note.id, linkedId)} className="w-6 h-6 rounded-full bg-red-500/80 text-white border border-white/50 flex items-center justify-center hover:bg-red-500 transition-colors">&times;</button>
                          </foreignObject>
                      )}
                    </g>
@@ -129,7 +110,6 @@ const ConnectionLayer = React.memo(({ notes, visibleNoteIds, hoveredConnectionId
     return <g>{hierarchicalConnections}{arbitraryLinks}</g>;
 });
 
-// ---------------- Main App Component ----------------
 const useWindowSize = () => {
     const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
     useEffect(() => {
@@ -237,18 +217,16 @@ const App: React.FC = () => {
       };
   }, [linkDragState, creationMenu, selectionBox, setSelectedNoteIds]);
 
-  // Optimization: Memoize visible IDs so we don't recalculate on every micro-update unless pan/zoom changes significantly
   const visibleNoteIds = useMemo(() => {
     const { pan, zoom } = canvasState;
     const { width, height } = windowSize;
-    const padding = 200; 
+    const padding = 300; 
     const viewLeft = -pan.x / zoom - padding;
     const viewTop = -pan.y / zoom - padding;
     const viewRight = (-pan.x + width) / zoom + padding;
     const viewBottom = (-pan.y + height) / zoom + padding;
     const visibleIds = new Set<string>();
     
-    // Using Object.values is O(N). For < 1000 notes, this is acceptable (sub-1ms).
     for (const note of Object.values(notes) as Note[]) {
         const style = NOTE_STYLES[note.type];
         const noteRight = note.position.x + style.size.diameter;
@@ -261,18 +239,23 @@ const App: React.FC = () => {
   }, [canvasState.pan.x, canvasState.pan.y, canvasState.zoom, notes, windowSize]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    const { zoom, pan } = useStore.getState().canvasState;
-    const scrollMultiplier = 0.001;
-    const newZoom = Math.max(ZOOM_LEVELS.MIN, Math.min(ZOOM_LEVELS.MAX, zoom * (1 - e.deltaY * scrollMultiplier)));
-    
-    const rect = appRef.current!.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    const newPanX = mouseX - (mouseX - pan.x) * (newZoom / zoom);
-    const newPanY = mouseY - (mouseY - pan.y) * (newZoom / zoom);
-    
-    setCanvasState({ zoom: newZoom, pan: {x: newPanX, y: newPanY } });
+    if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const { zoom, pan } = useStore.getState().canvasState;
+        const scrollMultiplier = 0.0015;
+        const newZoom = Math.max(ZOOM_LEVELS.MIN, Math.min(ZOOM_LEVELS.MAX, zoom * (1 - e.deltaY * scrollMultiplier)));
+        
+        const rect = appRef.current!.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const newPanX = mouseX - (mouseX - pan.x) * (newZoom / zoom);
+        const newPanY = mouseY - (mouseY - pan.y) * (newZoom / zoom);
+        
+        setCanvasState({ zoom: newZoom, pan: {x: newPanX, y: newPanY } });
+    } else {
+        const { pan } = useStore.getState().canvasState;
+        setCanvasState({ pan: { x: pan.x - e.deltaX, y: pan.y - e.deltaY } });
+    }
   }, [setCanvasState]);
   
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -301,8 +284,6 @@ const App: React.FC = () => {
       let targetId: string | null = null;
       let targetCenter = { x: rawMouseX, y: rawMouseY };
 
-      // Optimized Snap-to-Target Detection
-      // Iterate only visible notes for snapping
       for (const id of visibleNoteIds) {
           if (id === linkDragState.fromId) continue;
           const note = notes[id];
@@ -313,10 +294,9 @@ const App: React.FC = () => {
           const centerX = note.position.x + radius;
           const centerY = note.position.y + radius;
           
-          // Check distance to center with a forgiveness margin
           const dist = Math.hypot(rawMouseX - centerX, rawMouseY - centerY);
           
-          if (dist < radius + 30) { // +30px forgiveness margin
+          if (dist < radius + 40) { 
               targetId = id;
               targetCenter = { x: centerX, y: centerY };
               break;
@@ -397,6 +377,26 @@ const App: React.FC = () => {
     setCreationMenu({ visible: true, x: e.clientX, y: e.clientY });
   };
 
+  // Smart Zoom Feature
+  const handleNoteDoubleClick = useCallback((noteId: string) => {
+      const note = notes[noteId];
+      if (!note) return;
+
+      // Check if Smart Zoom is enabled (Pro Feature)
+      if (settings.mode !== 'core' && settings.pro.smartZoom) {
+          telemetry.track('action_performed', { action: 'smart_zoom', noteId });
+          const zoom = 1.2;
+          const { diameter } = NOTE_STYLES[note.type].size;
+          const newPanX = -note.position.x * zoom + window.innerWidth / 2 - (diameter * zoom / 2);
+          const newPanY = -note.position.y * zoom + window.innerHeight / 2 - (diameter * zoom / 2);
+          
+          setCanvasState({ zoom, pan: { x: newPanX, y: newPanY } });
+      } else {
+          // Default: Open focus view
+          setFocusedNoteId(noteId);
+      }
+  }, [notes, settings, setCanvasState, setFocusedNoteId]);
+
   const handleCreateNoteFromMenu = useCallback((type: NoteType) => {
     if (!appRef.current) return;
     const rect = appRef.current.getBoundingClientRect();
@@ -411,9 +411,7 @@ const App: React.FC = () => {
     setLinkDragState({ fromId: noteId, fromPosition, toMousePos: fromPosition });
   }, []);
 
-  const handleNoteMouseUp = useCallback((noteId: string) => {
-      // Kept for fallback, but main logic is now in App-level handleMouseUp
-  }, []);
+  const handleNoteMouseUp = useCallback((noteId: string) => {}, []);
 
   const handleCloseFocusView = () => {
     if (focusedNoteId && focusedEditorRef.current) {
@@ -460,6 +458,7 @@ const App: React.FC = () => {
                     setHoveredConnectionId={setHoveredConnectionId} 
                     removeParentLink={removeParentLink} 
                     removeLink={removeLink} 
+                    settings={settings}
                   />
               )}
               {linkDragState && (
@@ -478,6 +477,7 @@ const App: React.FC = () => {
                   isPartofSelectedGroup={!!note.groupId && selectedGroupIds.has(note.groupId) && !selectedNoteIds.includes(note.id)}
                   onStartLinkDrag={handleStartLinkDrag}
                   onNoteMouseUp={handleNoteMouseUp}
+                  onNoteDoubleClick={handleNoteDoubleClick}
                   isLinking={!!linkDragState}
                   isLinkTarget={potentialLinkTargetId === note.id}
                 />
