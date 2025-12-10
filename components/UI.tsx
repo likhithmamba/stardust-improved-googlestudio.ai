@@ -208,35 +208,71 @@ const SettingsModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
 
                             {/* Pro Features Sub-menu */}
                             {settings.mode !== 'core' && (
-                                <div className="mb-6 p-4 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                                    <h3 className="font-semibold text-md mb-3 text-amber-400">Pro Features</h3>
-                                    <div className="space-y-2">
-                                        <label className="flex items-center justify-between cursor-pointer">
-                                            <span className="text-sm flex items-center"><Magnet size={14} className="mr-2"/> Magnetic Alignment</span>
-                                            <input type="checkbox" checked={settings.pro.magneticAlignment} onChange={(e) => setSettings(s => ({ pro: { ...s.pro, magneticAlignment: e.target.checked } }))} className="accent-amber-400" />
-                                        </label>
-                                        <label className="flex items-center justify-between cursor-pointer">
-                                            <span className="text-sm flex items-center"><Target size={14} className="mr-2"/> Smart Zoom</span>
-                                            <input type="checkbox" checked={settings.pro.smartZoom} onChange={(e) => setSettings(s => ({ pro: { ...s.pro, smartZoom: e.target.checked } }))} className="accent-amber-400" />
-                                        </label>
-                                    </div>
-                                </div>
-                            )}
+                                <div className="mb-6">
+                                    <h3 className="font-semibold text-md mb-3 text-amber-400 flex items-center">
+                                        <Crown size={16} className="mr-2" /> Pro Tools
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {/* Magnetic Alignment Card */}
+                                        <button
+                                            onClick={() => setSettings(s => ({ pro: { ...s.pro, magneticAlignment: !s.pro.magneticAlignment } }))}
+                                            className={`p-3 rounded-lg border flex flex-col items-center justify-center text-center transition-all duration-200 ${
+                                                settings.pro.magneticAlignment
+                                                    ? 'bg-amber-500/20 border-amber-500 text-amber-100 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+                                                    : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                                            }`}
+                                        >
+                                            <Magnet size={24} className={`mb-2 ${settings.pro.magneticAlignment ? 'text-amber-400' : 'text-gray-500'}`} />
+                                            <span className="text-sm font-bold">Magnetic Grid</span>
+                                            <span className="text-[10px] opacity-70 mt-1">Snap nodes to position</span>
+                                        </button>
 
-                            {/* Ultra Features Sub-menu */}
-                            {settings.mode === 'ultra' && (
-                                <div className="mb-6 p-4 bg-purple-500/10 rounded-lg border border-purple-500/20">
-                                    <h3 className="font-semibold text-md mb-3 text-purple-400">Ultra Features</h3>
-                                    <div className="space-y-2">
-                                        <label className="flex items-center justify-between cursor-pointer">
-                                            <span className="text-sm flex items-center"><Network size={14} className="mr-2"/> Hierarchy Lines</span>
-                                            <input type="checkbox" checked={settings.ultra.hierarchyLines} onChange={(e) => setSettings(s => ({ ultra: { ...s.ultra, hierarchyLines: e.target.checked } }))} className="accent-purple-400" />
-                                        </label>
-                                        <label className="flex items-center justify-between cursor-pointer">
-                                            <span className="text-sm flex items-center"><FileText size={14} className="mr-2"/> Invoice Universe</span>
-                                            <input type="checkbox" checked={settings.ultra.invoiceUniverse} onChange={(e) => setSettings(s => ({ ultra: { ...s.ultra, invoiceUniverse: e.target.checked } }))} className="accent-purple-400" />
-                                        </label>
+                                        {/* Smart Zoom Card */}
+                                        <button
+                                            onClick={() => setSettings(s => ({ pro: { ...s.pro, smartZoom: !s.pro.smartZoom } }))}
+                                            className={`p-3 rounded-lg border flex flex-col items-center justify-center text-center transition-all duration-200 ${
+                                                settings.pro.smartZoom
+                                                    ? 'bg-amber-500/20 border-amber-500 text-amber-100 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+                                                    : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                                            }`}
+                                        >
+                                            <Target size={24} className={`mb-2 ${settings.pro.smartZoom ? 'text-amber-400' : 'text-gray-500'}`} />
+                                            <span className="text-sm font-bold">Smart Zoom</span>
+                                            <span className="text-[10px] opacity-70 mt-1">Auto-focus content</span>
+                                        </button>
                                     </div>
+                                    
+                                    {/* Ultra Features within the Pro block for layout consistency, only visible in Ultra */}
+                                    {settings.mode === 'ultra' && (
+                                        <div className="mt-3 grid grid-cols-2 gap-3">
+                                            {/* Hierarchy Lines */}
+                                            <button
+                                                onClick={() => setSettings(s => ({ ultra: { ...s.ultra, hierarchyLines: !s.ultra.hierarchyLines } }))}
+                                                className={`p-3 rounded-lg border flex flex-col items-center justify-center text-center transition-all duration-200 ${
+                                                    settings.ultra.hierarchyLines
+                                                        ? 'bg-purple-500/20 border-purple-500 text-purple-100 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
+                                                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                                                }`}
+                                            >
+                                                <Network size={24} className={`mb-2 ${settings.ultra.hierarchyLines ? 'text-purple-400' : 'text-gray-500'}`} />
+                                                <span className="text-sm font-bold">Hierarchy</span>
+                                                <span className="text-[10px] opacity-70 mt-1">Visualize parent links</span>
+                                            </button>
+                                            {/* Invoice Universe */}
+                                            <button
+                                                onClick={() => setSettings(s => ({ ultra: { ...s.ultra, invoiceUniverse: !s.ultra.invoiceUniverse } }))}
+                                                className={`p-3 rounded-lg border flex flex-col items-center justify-center text-center transition-all duration-200 ${
+                                                    settings.ultra.invoiceUniverse
+                                                        ? 'bg-purple-500/20 border-purple-500 text-purple-100 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
+                                                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20'
+                                                }`}
+                                            >
+                                                <FileText size={24} className={`mb-2 ${settings.ultra.invoiceUniverse ? 'text-purple-400' : 'text-gray-500'}`} />
+                                                <span className="text-sm font-bold">Invoice Mode</span>
+                                                <span className="text-[10px] opacity-70 mt-1">Client billing tools</span>
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             
@@ -666,4 +702,33 @@ export const Toolbar: React.FC = () => {
                                     <button onClick={() => handleArrange('spiral')} className="flex items-center p-2 hover:bg-white/10 rounded transition-colors text-sm text-white">
                                         <Wind size={16} className="mr-2 text-rose-400" /> Spiral
                                     </button>
-                                    <button onClick={() => handleArrange('
+                                    <button onClick={() => handleArrange('solar')} className="flex items-center p-2 hover:bg-white/10 rounded transition-colors text-sm text-white">
+                                        <Sun size={16} className="mr-2 text-amber-400" /> Solar System
+                                    </button>
+                                    <button onClick={() => handleArrange('flowchart')} className="flex items-center p-2 hover:bg-white/10 rounded transition-colors text-sm text-white">
+                                        <GitMerge size={16} className="mr-2 text-emerald-400" /> Flowchart
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </>
+            )}
+
+            {settings.mode === 'ultra' && (
+                <div className="flex items-center">
+                    <div className="w-px h-6 bg-white/30 mx-2"></div>
+                    <IconButton onClick={toggleAutoMap} title="Auto Map View (Cosmic Graph)" active={isAutoMapActive}>
+                        <Network size={20} className={isAutoMapActive ? 'text-green-400 animate-pulse' : ''} />
+                    </IconButton>
+                    <div className="px-2 text-xs font-bold text-purple-400 uppercase tracking-widest flex items-center"><Crown size={12} className="mr-1" /> Ultra</div>
+                </div>
+            )}
+            <IconButton onClick={() => setIsAboutOpen(true)} title="About"><HelpCircle size={20} /></IconButton>
+        </motion.div>
+      </div>
+      <AboutModal isOpen={isAboutOpen} onClose={() => setIsAboutOpen(false)} />
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    </>
+  );
+};
