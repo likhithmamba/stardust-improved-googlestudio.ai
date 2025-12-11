@@ -99,6 +99,127 @@ export const CELESTIAL_DESCRIPTIONS: Record<NoteType, string> = {
 
 export const QUICK_TEMPLATES: TemplateConfig[] = [
     {
+        name: 'Solar System Sprint',
+        type: NoteType.Galaxy,
+        theme: 'energetic',
+        icon: 'sun',
+        content: `
+            <div style="position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-family:'Inter', sans-serif;">
+              <div style="position:absolute; width:900px; height:900px; border:2px dashed rgba(255,255,255,0.05); border-radius:50%; pointer-events:none;"></div>
+              <div style="position:absolute; top:12%; left:50%; transform:translate(-50%, -50%); color:#64748b; font-size:0.9em; letter-spacing:3px; font-weight:bold;">BACKLOG (KUIPER BELT)</div>
+              
+              <div style="position:absolute; width:500px; height:500px; border:2px dashed rgba(255,255,255,0.15); border-radius:50%; pointer-events:none;"></div>
+              <div style="position:absolute; top:32%; left:50%; transform:translate(-50%, -50%); color:#fb923c; font-size:0.9em; letter-spacing:3px; font-weight:bold;">IN PROGRESS ORBIT</div>
+              
+              <div style="width:140px; height:140px; background:radial-gradient(circle at 30% 30%, #fcd34d, #f59e0b); border-radius:50%; box-shadow:0 0 60px #fcd34d; display:flex; align-items:center; justify-content:center; color:#78350f; font-weight:900; z-index:10; font-size:1.2rem; letter-spacing:1px;">DONE</div>
+            </div>
+        `,
+        tags: ['project', 'sprint', 'kanban']
+    },
+    {
+        name: 'Star Mapper',
+        type: NoteType.Galaxy,
+        theme: 'noir',
+        icon: 'network',
+        content: `
+            <div style="height:100%; background:radial-gradient(circle at center, #1e1b4b 0%, #000 100%); display:flex; align-items:center; justify-content:center; flex-direction:column; border-radius:50%;">
+                <h2 style="color:#c084fc; letter-spacing:6px; margin-bottom:40px; font-weight:300;">CONSTELLATION MAP</h2>
+                <svg width="600" height="300" style="opacity:0.7; overflow:visible;">
+                    <circle cx="300" cy="150" r="8" fill="white" filter="drop-shadow(0 0 5px white)" />
+                    <circle cx="150" cy="50" r="4" fill="#c084fc" />
+                    <circle cx="450" cy="50" r="4" fill="#c084fc" />
+                    <circle cx="100" cy="250" r="4" fill="#c084fc" />
+                    <circle cx="500" cy="250" r="4" fill="#c084fc" />
+                    <line x1="300" y1="150" x2="150" y2="50" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
+                    <line x1="300" y1="150" x2="450" y2="50" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
+                    <line x1="300" y1="150" x2="100" y2="250" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
+                    <line x1="300" y1="150" x2="500" y2="250" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
+                </svg>
+                <p style="color:#94a3b8; font-style:italic; margin-top:20px; font-size:0.9rem;">"Connect the stars to find the truth."</p>
+                <p style="color:#64748b; font-size:0.7rem; margin-top:5px;">Double-click empty space to spawn nodes.</p>
+            </div>
+        `,
+        tags: ['research', 'graph', 'zettelkasten']
+    },
+    {
+        name: 'Black Hole Filter',
+        type: NoteType.Galaxy,
+        theme: 'noir',
+        icon: 'filter',
+        content: `
+            <div style="display:grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height:100%; gap:30px; padding:60px; font-family:'Inter', sans-serif;">
+                <div style="border:1px solid rgba(74,222,128,0.3); background:linear-gradient(135deg, rgba(74,222,128,0.1), transparent); border-radius:20px; padding:25px;">
+                    <h3 style="color:#4ade80; font-weight:bold; letter-spacing:1px; margin-bottom:5px;">SPACE STATION</h3>
+                    <p style="opacity:0.6; font-size:0.9rem;">High Value / Quick Wins</p>
+                </div>
+                <div style="border:1px solid rgba(250,204,21,0.3); background:linear-gradient(135deg, rgba(250,204,21,0.1), transparent); border-radius:20px; padding:25px;">
+                    <h3 style="color:#facc15; font-weight:bold; letter-spacing:1px; margin-bottom:5px;">HIGH ORBIT</h3>
+                    <p style="opacity:0.6; font-size:0.9rem;">High Value / High Effort</p>
+                </div>
+                <div style="border:1px solid rgba(96,165,250,0.3); background:linear-gradient(135deg, rgba(96,165,250,0.1), transparent); border-radius:20px; padding:25px;">
+                    <h3 style="color:#60a5fa; font-weight:bold; letter-spacing:1px; margin-bottom:5px;">THE VOID</h3>
+                    <p style="opacity:0.6; font-size:0.9rem;">Low Value / Low Effort</p>
+                </div>
+                <div style="border:1px solid rgba(168,85,247,0.5); background:radial-gradient(circle at bottom right, #000 0%, #3b0764 40%, transparent 80%); border-radius:20px; padding:25px; display:flex; flex-direction:column; justify-content:flex-end; align-items:flex-end; box-shadow:inset -10px -10px 40px rgba(0,0,0,0.8);">
+                    <h3 style="color:#c084fc; font-weight:bold; letter-spacing:1px; margin-bottom:5px; text-align:right;">EVENT HORIZON</h3>
+                    <p style="opacity:0.6; font-size:0.9rem; text-align:right;">Drag here to delete.<br>Point of no return.</p>
+                </div>
+            </div>
+        `,
+        tags: ['decision', 'priority', 'matrix']
+    },
+    {
+        name: 'Branching Timelines',
+        type: NoteType.Galaxy,
+        theme: 'calm',
+        icon: 'git-branch',
+        content: `
+            <div style="display:flex; flex-direction:column; justify-content:center; height:100%; padding:60px; font-family:'Inter', sans-serif;">
+                <h2 style="text-align:center; color:#22d3ee; margin-bottom:60px; font-weight:300; letter-spacing:4px;">MULTIVERSE VERSIONS</h2>
+                <div style="position:relative; height:300px; display:flex; align-items:center;">
+                    <!-- Main Timeline -->
+                    <div style="position:absolute; width:100%; height:4px; background:#22d3ee; box-shadow:0 0 15px #22d3ee; border-radius:2px;"></div>
+                    
+                    <div style="z-index:10; background:#0f172a; border:1px solid #22d3ee; padding:8px 20px; border-radius:20px; margin-left:50px; color:#22d3ee; font-size:0.9rem;">Main V1.0</div>
+                    <div style="z-index:10; background:#0f172a; border:1px solid #22d3ee; padding:8px 20px; border-radius:20px; margin-left:350px; color:#22d3ee; font-size:0.9rem;">Main V2.0</div>
+                    
+                    <!-- Branch -->
+                    <svg style="position:absolute; top:50%; left:150px; width:400px; height:150px; overflow:visible; pointer-events:none;">
+                        <path d="M 20 0 Q 80 100 200 100 L 350 100" stroke="#f472b6" stroke-width="2" fill="none" stroke-dasharray="8,4" />
+                    </svg>
+                    <div style="position:absolute; top:190px; left:450px; background:#0f172a; border:1px solid #f472b6; padding:8px 20px; border-radius:20px; color:#f472b6; font-size:0.9rem;">Experimental Branch</div>
+                </div>
+            </div>
+        `,
+        tags: ['versioning', 'git', 'design']
+    },
+    {
+        name: 'From Dust to Star',
+        type: NoteType.Galaxy,
+        theme: 'default',
+        icon: 'stars',
+        content: `
+            <div style="display:flex; height:100%; border-radius:50%; overflow:hidden;">
+                <!-- Nebula -->
+                <div style="flex:1; background:linear-gradient(135deg, rgba(76,29,149,0.2), rgba(0,0,0,0)); padding:40px; border-right:1px dashed rgba(255,255,255,0.1); display:flex; flex-direction:column; justify-content:center;">
+                    <h3 style="color:#c084fc; font-family:'serif'; font-style:italic; font-size:1.5rem; margin-bottom:10px;">I. Nebula</h3>
+                    <p style="opacity:0.6; font-size:1rem;">Chaos. Brainstorm freely here. No structure, just gas and dust.</p>
+                </div>
+                <!-- Protostar -->
+                <div style="flex:1; background:linear-gradient(135deg, rgba(234,179,8,0.1), rgba(0,0,0,0)); padding:40px; border-right:1px dashed rgba(255,255,255,0.1); display:flex; flex-direction:column; justify-content:center;">
+                    <h3 style="color:#facc15; font-family:'sans-serif'; font-size:1.5rem; margin-bottom:10px;">II. Protostar</h3>
+                    <p style="opacity:0.6; font-size:1rem;">Gravity. Cluster related ideas together. Heat is building.</p>
+                </div>
+                <!-- Star -->
+                <div style="flex:1; background:linear-gradient(135deg, rgba(56,189,248,0.1), rgba(0,0,0,0)); padding:40px; background-image:radial-gradient(rgba(255,255,255,0.1) 1px, transparent 1px); background-size:20px 20px; display:flex; flex-direction:column; justify-content:center;">
+                    <h3 style="color:#38bdf8; font-family:'mono'; letter-spacing:2px; font-size:1.5rem; margin-bottom:10px;">III. Star</h3>
+                    <p style="opacity:0.6; font-size:1rem;">Structure. Finalize definitions. A stable system is born.</p>
+                </div>
+            </div>
+        `,
+        tags: ['process', 'growth', 'brainstorm']
+    },
+    {
         name: 'Strategic Roadmap',
         type: NoteType.Galaxy,
         theme: 'noir',

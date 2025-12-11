@@ -7,7 +7,7 @@ import useStore from '../hooks/useStore';
 import { 
     LayoutTemplate, Globe, Lock, 
     Kanban, Grid, AlertCircle, Target, Users, Code, Calendar, Quote,
-    Map, Layers, RefreshCw, UserCircle, Server, Activity
+    Map, Layers, RefreshCw, UserCircle, Server, Activity, Sun, Network, Filter, GitBranch, Stars
 } from 'lucide-react';
 
 interface CreationMenuProps {
@@ -57,6 +57,11 @@ const IconMap: Record<string, React.ElementType> = {
     'user-circle': UserCircle,
     server: Server,
     activity: Activity,
+    sun: Sun,
+    network: Network,
+    filter: Filter,
+    'git-branch': GitBranch,
+    stars: Stars,
 };
 
 const CreationMenu: React.FC<CreationMenuProps> = ({ x, y, onSelect, onClose }) => {

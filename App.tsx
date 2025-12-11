@@ -26,6 +26,11 @@ interface LinkDragState {
 }
 
 // ---------------- Helper Functions ----------------
+const CHUNK_SIZE = 1200; // Size of spatial chunks for virtualization
+
+const getChunkKey = (x: number, y: number) => 
+    `${Math.floor(x / CHUNK_SIZE)}:${Math.floor(y / CHUNK_SIZE)}`;
+
 const getCurvePath = (p1: {x:number, y:number}, p2: {x:number, y:number}) => {
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
@@ -49,14 +54,23 @@ const calculateEdgePoints = (noteA: Note, noteB: Note) => {
 const ConnectionLayer = React.memo(({ notes, visibleNoteIds, hoveredConnectionId, setHoveredConnectionId, removeParentLink, removeLink, settings }: any) => {
     if (!notes) return null;
 
+    // Filter connections to only those involving visible notes to optimize SVG rendering
     const hierarchicalConnections = useMemo(() => {
         if (settings.mode !== 'ultra' && !settings.ultra?.hierarchyLines) return [];
         const rendered = [];
+        // We only iterate visible notes as sources. 
+        // Note: Lines incoming from invisible parents won't render unless we check parents too. 
+        // For performance, we assume standard flow or accept clipping at edges.
+        // To be safer, we could iterate all connections if N < 500, but for scaling, this is better.
         for (const noteId of visibleNoteIds) {
              const note = notes[noteId];
              if (!note || !note.parentId) continue;
              const parent = notes[note.parentId];
              if (!parent) continue;
+             
+             // Check if at least one endpoint is visible (optimization)
+             if (!visibleNoteIds.has(parent.id) && !visibleNoteIds.has(note.id)) continue;
+
              const { p1, p2 } = calculateEdgePoints(parent, note);
              const connId = `h-conn-${parent.id}-${note.id}`;
              const isHovered = hoveredConnectionId === connId;
@@ -79,19 +93,25 @@ const ConnectionLayer = React.memo(({ notes, visibleNoteIds, hoveredConnectionId
     const arbitraryLinks = useMemo(() => {
         const rendered: React.ReactNode[] = [];
         const processedPairs = new Set<string>();
+        
         for (const noteId of visibleNoteIds) {
             const note = notes[noteId];
             if (!note || !note.linkedNoteIds) continue;
+            
             for (const linkedId of note.linkedNoteIds) {
                  const targetNote = notes[linkedId];
                  if (!targetNote) continue;
+                 
+                 // Optimization: Only render if we haven't processed this pair yet
                  const pairKey = note.id < linkedId ? `${note.id}-${linkedId}` : `${linkedId}-${note.id}`;
                  if (processedPairs.has(pairKey)) continue;
                  processedPairs.add(pairKey);
+
                  const { p1, p2 } = calculateEdgePoints(note, targetNote);
                  const path = getCurvePath(p1, p2);
                  const connId = `a-conn-${pairKey}`;
                  const isHovered = hoveredConnectionId === connId;
+                 
                  rendered.push(
                    <g key={connId} onMouseEnter={() => setHoveredConnectionId(connId)} onMouseLeave={() => setHoveredConnectionId(null)} className="cursor-pointer">
                      <path d={path} fill="none" stroke={isHovered ? "rgba(239, 68, 68, 0.9)" : "rgba(59, 130, 246, 0.7)"} strokeWidth={isHovered ? "4" : "2"} className="transition-all duration-200" />
@@ -113,9 +133,19 @@ const ConnectionLayer = React.memo(({ notes, visibleNoteIds, hoveredConnectionId
 const useWindowSize = () => {
     const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
     useEffect(() => {
-        const handleResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
+        // Debounce resize
+        let timeoutId: number;
+        const handleResize = () => {
+             clearTimeout(timeoutId);
+             timeoutId = window.setTimeout(() => {
+                setSize({ width: window.innerWidth, height: window.innerHeight });
+             }, 100);
+        };
         window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            clearTimeout(timeoutId);
+        };
     }, []);
     return size;
 };
@@ -173,7 +203,6 @@ const App: React.FC = () => {
     }
   }, [settings.fontColor]);
 
-  // Apply Font Size setting
   useEffect(() => {
       document.documentElement.style.setProperty('--note-font-size', `${settings.fontSize}rem`);
   }, [settings.fontSize]);
@@ -217,26 +246,60 @@ const App: React.FC = () => {
       };
   }, [linkDragState, creationMenu, selectionBox, setSelectedNoteIds]);
 
+  // --- OPTIMIZATION: Spatial Indexing for Virtualization ---
+  // Memos the spatial grid so we can query chunks O(1) instead of iterating all notes O(N).
+  // Only rebuilds when notes change.
+  const spatialIndex = useMemo(() => {
+      const map = new Map<string, string[]>();
+      const ids = Object.keys(notes);
+      for (const id of ids) {
+          const note = notes[id];
+          const key = getChunkKey(note.position.x, note.position.y);
+          const chunk = map.get(key) || [];
+          chunk.push(id);
+          map.set(key, chunk);
+      }
+      return map;
+  }, [notes]);
+
+  // Calculate a stable signature of visible chunks to prevent re-renders during small pans
+  const visibleChunkKeys = useMemo(() => {
+      const { pan, zoom } = canvasState;
+      const { width, height } = windowSize;
+      const padding = 200; // Buffer around viewport
+      
+      const tlX = -pan.x / zoom;
+      const tlY = -pan.y / zoom;
+      const brX = (width - pan.x) / zoom;
+      const brY = (height - pan.y) / zoom;
+
+      const startChunkX = Math.floor((tlX - padding) / CHUNK_SIZE);
+      const endChunkX = Math.floor((brX + padding) / CHUNK_SIZE);
+      const startChunkY = Math.floor((tlY - padding) / CHUNK_SIZE);
+      const endChunkY = Math.floor((brY + padding) / CHUNK_SIZE);
+
+      const keys: string[] = [];
+      for (let x = startChunkX; x <= endChunkX; x++) {
+          for (let y = startChunkY; y <= endChunkY; y++) {
+              keys.push(`${x}:${y}`);
+          }
+      }
+      return keys.join(','); // Stable primitive string
+  }, [canvasState.pan.x, canvasState.pan.y, canvasState.zoom, windowSize]);
+
+  // Re-calculate visible IDs only when the set of visible chunks changes.
+  // This drastically reduces work during panning within a chunk.
   const visibleNoteIds = useMemo(() => {
-    const { pan, zoom } = canvasState;
-    const { width, height } = windowSize;
-    const padding = 300; 
-    const viewLeft = -pan.x / zoom - padding;
-    const viewTop = -pan.y / zoom - padding;
-    const viewRight = (-pan.x + width) / zoom + padding;
-    const viewBottom = (-pan.y + height) / zoom + padding;
-    const visibleIds = new Set<string>();
-    
-    for (const note of Object.values(notes) as Note[]) {
-        const style = NOTE_STYLES[note.type];
-        const noteRight = note.position.x + style.size.diameter;
-        const noteBottom = note.position.y + style.size.diameter;
-        if (noteRight > viewLeft && note.position.x < viewRight && noteBottom > viewTop && note.position.y < viewBottom) {
-            visibleIds.add(note.id);
-        }
-    }
-    return visibleIds;
-  }, [canvasState.pan.x, canvasState.pan.y, canvasState.zoom, notes, windowSize]);
+      const keys = visibleChunkKeys.split(',');
+      const ids = new Set<string>();
+      keys.forEach(key => {
+          const chunk = spatialIndex.get(key);
+          if (chunk) {
+              for(const id of chunk) ids.add(id);
+          }
+      });
+      return ids;
+  }, [visibleChunkKeys, spatialIndex]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
@@ -284,6 +347,7 @@ const App: React.FC = () => {
       let targetId: string | null = null;
       let targetCenter = { x: rawMouseX, y: rawMouseY };
 
+      // Optimization: Only collision check against visible notes
       for (const id of visibleNoteIds) {
           if (id === linkDragState.fromId) continue;
           const note = notes[id];
@@ -342,18 +406,21 @@ const App: React.FC = () => {
         const top = Math.min(startY, endY), bottom = Math.max(startY, endY);
         
         if (Math.abs(startX - endX) > 5 || Math.abs(startY - endY) > 5) {
-            const newlySelectedIds = (Object.values(notes) as Note[])
-                .filter(note => {
-                    const style = NOTE_STYLES[note.type];
-                    const noteRect = {
-                        left: note.position.x * canvasState.zoom + canvasState.pan.x,
-                        top: note.position.y * canvasState.zoom + canvasState.pan.y,
-                        right: (note.position.x + style.size.diameter) * canvasState.zoom + canvasState.pan.x,
-                        bottom: (note.position.y + style.size.diameter) * canvasState.zoom + canvasState.pan.y,
-                    };
-                    return noteRect.left < right && noteRect.right > left && noteRect.top < bottom && noteRect.bottom > top;
-                })
-                .map(note => note.id);
+            // Optimization: Only check visibility against visible notes
+            const newlySelectedIds = [];
+            for (const id of visibleNoteIds) {
+                const note = notes[id];
+                const style = NOTE_STYLES[note.type];
+                const noteRect = {
+                    left: note.position.x * canvasState.zoom + canvasState.pan.x,
+                    top: note.position.y * canvasState.zoom + canvasState.pan.y,
+                    right: (note.position.x + style.size.diameter) * canvasState.zoom + canvasState.pan.x,
+                    bottom: (note.position.y + style.size.diameter) * canvasState.zoom + canvasState.pan.y,
+                };
+                if (noteRect.left < right && noteRect.right > left && noteRect.top < bottom && noteRect.bottom > top) {
+                    newlySelectedIds.push(id);
+                }
+            }
             setSelectedNoteIds(prevIds => [...new Set([...prevIds, ...newlySelectedIds])]);
         }
         setSelectionBox(null);
